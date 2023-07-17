@@ -1,0 +1,60 @@
+import OpenGL.GL as GL              # standard Python OpenGL wrapper
+import sys
+import os
+
+
+class Shader:
+    """ Helper class to create and automatically destroy shader program """
+    def __init__(self, model):
+        """ Shader can be initialized with raw strings or source file names """
+        self.render_idx = None
+        self.shader_model = model
+        vert = self._compile_shader(self._resolve_vert_shader_path(model), GL.GL_VERTEX_SHADER)
+        frag = self._compile_shader(self._resolve_frag_shader_path(model), GL.GL_FRAGMENT_SHADER)
+        if vert and frag:
+            self.render_idx = GL.glCreateProgram()  # pylint: disable=E1111
+            GL.glAttachShader(self.render_idx, vert)
+            GL.glAttachShader(self.render_idx, frag)
+            GL.glLinkProgram(self.render_idx)
+            GL.glDeleteShader(vert)
+            GL.glDeleteShader(frag)
+            status = GL.glGetProgramiv(self.render_idx, GL.GL_LINK_STATUS)
+            if not status:
+                print(GL.glGetProgramInfoLog(self.render_idx).decode('ascii'))
+                sys.exit(1)
+
+    def __del__(self):
+        GL.glUseProgram(0)
+        if self.render_idx:                      # if this is a valid shader object
+            GL.glDeleteProgram(self.render_idx)  # object dies => destroy GL object
+
+    @staticmethod
+    def _compile_shader(src, shader_type):
+        src = open(src, 'r').read() if os.path.exists(src) else src
+        src = src.decode('ascii') if isinstance(src, bytes) else src
+        shader = GL.glCreateShader(shader_type)
+        GL.glShaderSource(shader, src)
+        GL.glCompileShader(shader)
+        status = GL.glGetShaderiv(shader, GL.GL_COMPILE_STATUS)
+        src = ('%3d: %s' % (i + 1, l) for i, l in enumerate(src.splitlines()))
+        if not status:
+            log = GL.glGetShaderInfoLog(shader).decode('ascii')
+            GL.glDeleteShader(shader)
+            src = '\n'.join(src)
+            print('Compile failed for %s\n%s\n%s' % (shader_type, log, src))
+            sys.exit(1)
+        return shader
+
+    @staticmethod
+    def _resolve_vert_shader_path(model):
+        if model == 0:
+            return "./unlit.vert"
+        else:
+            return "./phong.vert"
+
+    @staticmethod
+    def _resolve_frag_shader_path(model):
+        if model == 0:
+            return "./unlit.frag"
+        else:
+            return "./phong.frag"
